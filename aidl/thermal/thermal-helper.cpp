@@ -1043,7 +1043,7 @@ void ThermalHelperImpl::initializeTrip(const std::unordered_map<std::string, std
 
         bool trip_update = false;
         std::string_view sensor_name = sensor_info.first;
-        std::string_view tz_path = path_map.at(sensor_name.data());
+        std::string_view tz_path = path_map.at(sensor_info.second.zone_name);
         std::string tz_policy;
         std::string path =
                 ::android::base::StringPrintf("%s/%s", (tz_path.data()), kSensorPolicyFile.data());
@@ -1091,7 +1091,7 @@ void ThermalHelperImpl::initializeTrip(const std::unordered_map<std::string, std
                     break;
                 }
             }
-            monitored_sensors->insert(sensor_info.first);
+            monitored_sensors->insert(sensor_info.second.zone_name);
         }
 
         if (!trip_update) {
@@ -1613,7 +1613,18 @@ SensorReadStatus ThermalHelperImpl::readThermalSensor(
 // uevent_sensors_map maps sensor which trigger uevent from thermal core driver to the temperature
 // read from uevent.
 std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
-        const std::unordered_map<std::string, float> &uevent_sensor_map) {
+        const std::unordered_map<std::string, float> &uevent_zone_map) {
+    std::unordered_map<std::string, float> uevent_sensor_map;
+    for (const auto &[sensor_name, sensor_info] : sensor_info_map_) {
+        if (sensor_info.virtual_sensor_info != nullptr) {
+            continue;
+        }
+        auto event = uevent_zone_map.find(sensor_info.zone_name);
+        if (event != uevent_zone_map.end()) {
+            uevent_sensor_map.emplace(sensor_name, event->second);
+        }
+    }
+
     std::vector<Temperature> temps;
     std::vector<std::string> cooling_devices_to_update;
     boot_clock::time_point now = boot_clock::now();
